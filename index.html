@@ -157,7 +157,7 @@
             polyline.setMap(map); // Tampilkan polyline di peta
 
             // Ambil data dari ThingSpeak
-            fetch('https://api.thingspeak.com/channels/2770137/feeds.json?api_key=7BGJDVKJI2PHOWLZ&results=10')
+            fetch('https://api.thingspeak.com/channels/2770472/feeds.json?api_key=7BGJDVKJI2PHOWLZ&results=16')
                 .then(response => response.json())
                 .then(data => {
                     const feeds = data.feeds;
