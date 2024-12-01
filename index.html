@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +11,7 @@
             margin: 0; /* Menghilangkan margin default */
             font-family: Arial, sans-serif; /* Jenis font */
         }
+
         #banner {
             background-color: red; /* Warna latar belakang merah */
             color: white; /* Warna teks putih */
@@ -21,17 +23,20 @@
             align-items: center; /* Menyelaraskan item di tengah secara vertikal */
             justify-content: flex-start; /* Mengatur agar teks di sebelah kiri */
         }
+
         #banner img {
             margin-right: 15px; /* Jarak antara logo dan teks */
             height: 50px; /* Tinggi logo */
             width: auto; /* Agar lebar mengikuti proporsi */
         }
+
         #map {
-            height: calc(100vh - 180px); /* Tinggi peta dikurangi tinggi kotak teks dan banner */
+            height: calc(100vh - 220px); /* Tinggi peta dikurangi tinggi kotak teks dan banner */
             width: 100%; /* Full width */
         }
+
         #infoBox {
-            height: 180px; /* Tinggi kotak ditambah untuk suhu */
+            height: 220px; /* Tinggi kotak ditambah untuk suhu dan waktu perjalanan */
             width: 100%; /* Full width */
             background-color: rgba(255, 255, 255, 0.9); /* Warna latar belakang dengan transparansi */
             display: flex; /* Menggunakan flexbox untuk penataan konten */
@@ -42,33 +47,26 @@
             z-index: 1; /* Mengatur urutan z agar di atas peta */
             padding: 10px; /* Memberikan padding untuk ruang di dalam kotak */
         }
-        #coordinates {
-            margin-top: 5px; /* Jarak antara "Posisi Container" dan koordinat */
+
+        #coordinates,
+        #speed,
+        #weather,
+        #distance,
+        #time {
+            margin-top: 5px; /* Jarak antara elemen */
             margin-left: 15px; /* Jarak ke kiri */
-            font-size: 14px; /* Ukuran font untuk koordinat */
+            font-size: 12px; /* Ukuran font yang diperkecil untuk elemen */
         }
-        #speedLabel {
-            margin-top: 10px; /* Jarak antara teks "Kecepatan" dan label */
-            font-size: 16px; /* Ukuran font untuk label kecepatan */
-            font-weight: bold; /* Bold untuk label kecepatan */
+
+        #speedLabel,
+        #weatherLabel,
+        #distanceLabel,
+        #timeLabel {
+            margin-top: 10px; /* Jarak antara label dan hasil */
+            font-size: 14px; /* Ukuran font untuk label */
+            font-weight: bold; /* Bold untuk label */
         }
-        #speed {
-            margin-top: 5px; /* Jarak antara label kecepatan dan hasil kecepatan */
-            margin-left: 15px; /* Menggeser kecepatan ke kanan */
-            font-size: 14px; /* Ukuran font untuk kecepatan */
-            color: black; /* Warna teks untuk kecepatan */
-        }
-        #weatherLabel {
-            margin-top: 10px; /* Jarak antara label cuaca dan suhu/kelembapan */
-            font-size: 16px; /* Ukuran font untuk label cuaca */
-            font-weight: bold; /* Bold untuk label cuaca */
-        }
-        #weather {
-            margin-top: 5px; /* Jarak antara label cuaca dan hasil cuaca */
-            margin-left: 15px; /* Menggeser hasil cuaca ke kanan */
-            font-size: 14px; /* Ukuran font untuk cuaca */
-            color: black; /* Warna teks untuk cuaca */
-        }
+
         #errorMessage {
             color: red;
             font-size: 24px;
@@ -76,16 +74,35 @@
             text-align: center; /* Rata tengah */
             position: absolute; /* Memposisikan di atas peta */
             top: 50%; /* Posisi tengah vertikal */
-            left: 0; 
+            left: 0;
             right: 0; /* Posisi tengah horizontal */
+        }
+
+        #downloadBtn {
+            margin: 10px; /* Margin untuk tombol */
+            padding: 5px 15px; /* Padding dalam tombol */
+            font-size: 16px; /* Ukuran font tombol */
+            background-color: #007BFF; /* Warna latar belakang tombol */
+            color: white; /* Warna teks tombol */
+            border: none; /* Hapus border tombol */
+            border-radius: 5px; /* Sudut melengkung */
+            cursor: pointer; /* Kursor pointer saat hover */
+        }
+
+        #downloadBtn:hover {
+            background-color: #0056b3; /* Warna saat hover */
         }
     </style>
 </head>
+
 <body>
     <div id="banner">
         <img src="https://cdn.pixabay.com/photo/2024/12/01/03/08/03-08-17-529_960_720.png" alt="Logo">
         Mlog Tracker_beta1
     </div> <!-- Banner teks di atas -->
+
+    <button id="downloadBtn" onclick="downloadCSV()">Data Log</button> <!-- Tombol Data Log -->
+
     <div id="map"></div>
     <div id="infoBox">
         <span id="positionLabel"><strong>Posisi Container:</strong></span>
@@ -94,6 +111,10 @@
         <span id="speed">- km/jam</span> <!-- Tempat untuk menampilkan kecepatan -->
         <span id="weatherLabel">Suhu/Kelembaban:</span>
         <span id="weather">- °C / - %</span> <!-- Tempat untuk menampilkan suhu dan kelembapan -->
+        <span id="distanceLabel"><strong>Jarak yang Ditempuh:</strong></span>
+        <span id="distance">0.00 km</span> <!-- Menampilkan jarak total -->
+        <span id="timeLabel"><strong>Lama Perjalanan:</strong></span>
+        <span id="time">0 jam</span> <!-- Menampilkan lama perjalanan -->
     </div> <!-- Kotak teks untuk menunjukkan posisi -->
     <div id="errorMessage">Tidak ada data lokasi yang tersedia.</div>
 
@@ -106,58 +127,86 @@
         let lastLat; // Latitude dari pembacaan terakhir
         let lastLng; // Longitude dari pembacaan terakhir
 
+        let totalDistance = 0; // Menyimpan total jarak yang telah ditempuh
+        let totalTime = 0; // Menyimpan total waktu perjalanan dalam jam
+
+        let initialLat; // Latitude posisi awal
+        let initialLng; // Longitude posisi awal
+
+        // Simpan data yang perlu diekspor ke CSV
+        let logData = []; // Array untuk menyimpan data log
+
         // Fungsi untuk menghitung jarak antara dua koordinat dalam kilometer
         function calculateDistance(lat1, lng1, lat2, lng2) {
             const R = 6371; // Radius Bumi dalam km
             const dLat = (lat2 - lat1) * (Math.PI / 180);
             const dLng = (lng2 - lng1) * (Math.PI / 180);
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                       Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-                      Math.sin(dLng/2) * Math.sin(dLng/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c; // Jarak dalam km
         }
 
         function fetchWeather(lat, lng) {
             const apiKey = 'f4940cdea8d4389f0ac27f57867d0d31';
             const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`;
-            
-            fetch(url)
+
+            return fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     if (data.main) {
                         const temperature = data.main.temp; // Suhu
                         const humidity = data.main.humidity; // Kelembaban
-                        document.getElementById('weather').innerText = `${temperature} °C / ${humidity} %`; // Menampilkan suhu dan kelembaban
+                        return { temperature, humidity }; // Mengembalikan data suhu dan kelembapan
                     } else {
-                        document.getElementById('weather').innerText = "Data tidak tersedia";
+                        return { temperature: '-', humidity: '-' }; // Data tidak tersedia
                     }
                 })
                 .catch(error => {
                     console.error("Error fetching weather data:", error);
+                    return { temperature: '-', humidity: '-' }; // Kembali ketika ada error
                 });
+        }
+
+        function downloadCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Lat,Lng,Kecepatan,Suhu (°C),Kelembapan (%),Jarak (km),Lama Perjalanan (jam)\n"; // Header CSV
+
+            logData.forEach(row => {
+                let rowData = row.join(",");
+                csvContent += rowData + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "data_log.csv");
+            document.body.appendChild(link); // Append ke body
+
+            link.click(); // Klik link untuk mengunduh
+            document.body.removeChild(link); // Menghapus link dari dom
         }
 
         function initMap() {
             // Inisialisasi peta
-            const defaultLocation = { lat: -8.559320, lng: 115.105210 };
             map = new google.maps.Map(document.getElementById("map"), {
                 zoom: 15,
-                center: defaultLocation,
+                center: { lat: -8.559320, lng: 115.105210 }, // Titik awal sebelum mendapatkan data
             });
 
-            // Inisialisasi polyline
+            // Inisialisasi polyline dengan warna merah
             polyline = new google.maps.Polyline({
-                path: path,
+                path: [],
                 geodesic: true,
-                strokeColor: '#0000FF', // Warna biru
+                strokeColor: '#FF0000', // Warna merah untuk polyline
                 strokeOpacity: 1.0,
-                strokeWeight: 2
+                strokeWeight: 4
             });
             polyline.setMap(map); // Tampilkan polyline di peta
 
             // Ambil data dari ThingSpeak
-            fetch('https://api.thingspeak.com/channels/2770472/feeds.json?api_key=7BGJDVKJI2PHOWLZ&results=16')
+            fetch('https://api.thingspeak.com/channels/2770472/feeds.json?api_key=7BGJDVKJI2PHOWLZ')
                 .then(response => response.json())
                 .then(data => {
                     const feeds = data.feeds;
@@ -167,7 +216,40 @@
                         return;
                     }
 
-                    feeds.forEach(feed => {
+                    // Ambil data pertama untuk posisi awal
+                    const firstFeed = feeds[0];
+                    initialLat = parseFloat(firstFeed.field1);
+                    initialLng = parseFloat(firstFeed.field2);
+                    initialTimestamp = new Date(firstFeed.created_at).getTime(); // Timestamp awal
+
+                    // Tambahkan marker untuk posisi awal
+                    if (!isNaN(initialLat) && !isNaN(initialLng)) {
+                        const defaultIcon = {
+                            path: google.maps.SymbolPath.CIRCLE, // Ikon lingkaran
+                            scale: 10, // Ukuran lingkaran marker
+                            fillColor: '#00FF00', // Warna isi lingkaran marker
+                            fillOpacity: 1,
+                            strokeColor: '#000000', // Warna tepi lingkaran marker
+                            strokeWeight: 2
+                        };
+
+                        new google.maps.Marker({
+                            position: { lat: initialLat, lng: initialLng },
+                            map: map,
+                            title: 'Posisi Awal',
+                            icon: defaultIcon // Menggunakan simbol lingkaran
+                        });
+
+                        // Pusatkan peta ke posisi awal
+                        map.setCenter({ lat: initialLat, lng: initialLng });
+                    }
+
+                    // Inisialisasi nilai sebelumnya
+                    lastLat = initialLat;
+                    lastLng = initialLng;
+                    lastTimestamp = initialTimestamp;
+
+                    feeds.forEach((feed, index) => {
                         const lat = parseFloat(feed.field1);
                         const lng = parseFloat(feed.field2);
                         const timestamp = new Date(feed.created_at).getTime(); // Dapatkan timestamp
@@ -175,27 +257,47 @@
                         // Validasi lat dan lng
                         if (!isNaN(lat) && !isNaN(lng)) {
                             // Jika ini bukan pembacaan yang pertama
-                            if (lastLat !== undefined && lastLng !== undefined) {
-                                // Hitung jarak
+                            if (index > 0) {
+                                // Hitung jarak dari posisi sebelumnya
                                 const distance = calculateDistance(lastLat, lastLng, lat, lng);
+                                totalDistance += distance; // Tambahkan ke total
 
                                 // Hitung waktu berlalu dalam jam
                                 const timeElapsed = (timestamp - lastTimestamp) / 3600000; // konversi dari ms ke jam
+                                const speed = timeElapsed > 0 ? (distance / timeElapsed).toFixed(2) : 0; // km/jam
 
-                                // Hitung kecepatan
-                                const speed = (distance / timeElapsed).toFixed(2); // km/jam
+                                // Update kecepatan, jarak, dan lama perjalanan
+                                totalTime = (totalDistance / (speed > 0 ? speed : 1)).toFixed(2); // Lama perjalanan dalam jam
 
-                                // Update kecepatan di infoBox
-                                document.getElementById('speed').innerText = `${speed} km/jam`;
+                                // Update infoBox
+                                document.getElementById('speed').innerText = `${speed} km/jam`; // Menampilkan kecepatan
+                                document.getElementById('distance').innerText = `${totalDistance.toFixed(2)} km`; // Menampilkan jarak total
+                                document.getElementById('time').innerText = `${totalTime} jam`; // Menampilkan lama perjalanan
+
+                                // Ambil data suhu dan kelembapan dari API cuaca
+                                fetchWeather(lat, lng).then(weatherData => {
+                                    const { temperature, humidity } = weatherData;
+
+                                    // Tampilkan suhu dan kelembapan 
+                                    document.getElementById('weather').innerText = `${temperature} °C / ${humidity} %`;
+
+                                    // Tambahkan data log ke array
+                                    logData.push([
+                                        lat,
+                                        lng,
+                                        speed,
+                                        temperature,
+                                        humidity,
+                                        totalDistance.toFixed(2),
+                                        totalTime
+                                    ]); // Simpan data ke log
+                                });
                             }
 
                             // Update lokasi dan timestamp
                             lastLat = lat;
                             lastLng = lng;
                             lastTimestamp = timestamp;
-
-                            // Ambil data suhu dan kelembaban dari API cuaca
-                            fetchWeather(lat, lng);
 
                             // Tambahkan lokasi ke array path dan update polyline
                             path.push({ lat, lng });
@@ -223,17 +325,18 @@
                             // Center the map to the latest position
                             map.setCenter({ lat: lat, lng: lng });
                         } else {
-                            document.getElementById('errorMessage').style.display = 'block';
+                            document.getElementById('errorMessage').style.display = 'block'; // Tampilkan pesan error
                         }
                     });
                 })
                 .catch(error => {
                     console.error("Error fetching data from ThingSpeak:", error);
-                    document.getElementById('errorMessage').style.display = 'block';
+                    document.getElementById('errorMessage').style.display = 'block'; // Tampilkan pesan error
                 });
         }
 
         window.onload = initMap; // Inisialisasi peta saat jendela dimuat
     </script>
 </body>
+
 </html>
