@@ -1,56 +1,163 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualisasi Data GPS di Peta</title>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFf0iGjJdWxg2Tvth6WP9bwzaS2SK9J2c"></script>
     <style>
         body {
             margin: 0; /* Menghilangkan margin default */
+            font-family: Arial, sans-serif; /* Jenis font */
+        }
+        #banner {
+            background-color: red; /* Warna latar belakang merah */
+            color: white; /* Warna teks putih */
+            text-align: center; /* Rata tengah */
+            padding: 15px; /* Padding di dalam banner */
+            font-size: 24px; /* Ukuran font untuk banner */
+            position: relative; /* Posisi relatif untuk logo */
+            display: flex; /* Menggunakan flexbox untuk penataan konten */
+            align-items: center; /* Menyelaraskan item di tengah secara vertikal */
+            justify-content: flex-start; /* Mengatur agar teks di sebelah kiri */
+        }
+        #banner img {
+            margin-right: 15px; /* Jarak antara logo dan teks */
+            height: 50px; /* Tinggi logo */
+            width: auto; /* Agar lebar mengikuti proporsi */
         }
         #map {
-            height: calc(100vh - 120px); /* Tinggi peta dikurangi tinggi kotak teks */
+            height: calc(100vh - 180px); /* Tinggi peta dikurangi tinggi kotak teks dan banner */
             width: 100%; /* Full width */
         }
         #infoBox {
-            height: 120px; /* Tinggi kotak */
+            height: 180px; /* Tinggi kotak ditambah untuk suhu */
             width: 100%; /* Full width */
             background-color: rgba(255, 255, 255, 0.9); /* Warna latar belakang dengan transparansi */
             display: flex; /* Menggunakan flexbox untuk penataan konten */
-            align-items: center; /* Mengatur konten secara vertikal */
-            justify-content: center; /* Mengatur konten secara horizontal */
-            font-size: 24px; /* Ukuran font */
-            color: black; /* Warna teks */
+            flex-direction: column; /* Menyusun teks secara vertikal */
             position: absolute; /* Memposisikan kotak di atas peta */
-            top: 0; /* Posisi atas */
+            bottom: 0; /* Posisi bawah */
             left: 0; /* Posisi kiri */
             z-index: 1; /* Mengatur urutan z agar di atas peta */
+            padding: 10px; /* Memberikan padding untuk ruang di dalam kotak */
+        }
+        #coordinates {
+            margin-top: 5px; /* Jarak antara "Posisi Container" dan koordinat */
+            margin-left: 15px; /* Jarak ke kiri */
+            font-size: 14px; /* Ukuran font untuk koordinat */
+        }
+        #speedLabel {
+            margin-top: 10px; /* Jarak antara teks "Kecepatan" dan label */
+            font-size: 16px; /* Ukuran font untuk label kecepatan */
+            font-weight: bold; /* Bold untuk label kecepatan */
+        }
+        #speed {
+            margin-top: 5px; /* Jarak antara label kecepatan dan hasil kecepatan */
+            margin-left: 15px; /* Menggeser kecepatan ke kanan */
+            font-size: 14px; /* Ukuran font untuk kecepatan */
+            color: black; /* Warna teks untuk kecepatan */
+        }
+        #weatherLabel {
+            margin-top: 10px; /* Jarak antara label cuaca dan suhu/kelembapan */
+            font-size: 16px; /* Ukuran font untuk label cuaca */
+            font-weight: bold; /* Bold untuk label cuaca */
+        }
+        #weather {
+            margin-top: 5px; /* Jarak antara label cuaca dan hasil cuaca */
+            margin-left: 15px; /* Menggeser hasil cuaca ke kanan */
+            font-size: 14px; /* Ukuran font untuk cuaca */
+            color: black; /* Warna teks untuk cuaca */
         }
         #errorMessage {
             color: red;
             font-size: 24px;
             display: none; /* Sembunyikan pesan secara default */
+            text-align: center; /* Rata tengah */
+            position: absolute; /* Memposisikan di atas peta */
+            top: 50%; /* Posisi tengah vertikal */
+            left: 0; 
+            right: 0; /* Posisi tengah horizontal */
         }
     </style>
 </head>
 <body>
-    <div id="infoBox">Lat: -, Lng: -</div> <!-- Kotak teks untuk menunjukkan posisi -->
+    <div id="banner">
+        <img src="https://cdn.pixabay.com/photo/2024/12/01/03/08/03-08-17-529_960_720.png" alt="Logo">
+        Mlog Tracker_beta1
+    </div> <!-- Banner teks di atas -->
     <div id="map"></div>
+    <div id="infoBox">
+        <span id="positionLabel"><strong>Posisi Container:</strong></span>
+        <span id="coordinates">Lat: -, Lng: -</span>
+        <span id="speedLabel">Kecepatan:</span>
+        <span id="speed">- km/jam</span> <!-- Tempat untuk menampilkan kecepatan -->
+        <span id="weatherLabel">Suhu/Kelembaban:</span>
+        <span id="weather">- °C / - %</span> <!-- Tempat untuk menampilkan suhu dan kelembapan -->
+    </div> <!-- Kotak teks untuk menunjukkan posisi -->
     <div id="errorMessage">Tidak ada data lokasi yang tersedia.</div>
 
     <script>
         let map;
         let currentMarker; // Untuk menyimpan marker saat ini
+        let polyline; // Untuk menyimpan polyline trek
+        let path = []; // Array untuk menyimpan titik lokasi
+        let lastTimestamp; // Untuk menyimpan timestamp pembacaan terakhir
+        let lastLat; // Latitude dari pembacaan terakhir
+        let lastLng; // Longitude dari pembacaan terakhir
+
+        // Fungsi untuk menghitung jarak antara dua koordinat dalam kilometer
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Radius Bumi dalam km
+            const dLat = (lat2 - lat1) * (Math.PI / 180);
+            const dLng = (lng2 - lng1) * (Math.PI / 180);
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; // Jarak dalam km
+        }
+
+        function fetchWeather(lat, lng) {
+            const apiKey = 'f4940cdea8d4389f0ac27f57867d0d31';
+            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${apiKey}&units=metric`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.main) {
+                        const temperature = data.main.temp; // Suhu
+                        const humidity = data.main.humidity; // Kelembaban
+                        document.getElementById('weather').innerText = `${temperature} °C / ${humidity} %`; // Menampilkan suhu dan kelembaban
+                    } else {
+                        document.getElementById('weather').innerText = "Data tidak tersedia";
+                    }
+                })
+                .catch(error => {
+                    console.error("Error fetching weather data:", error);
+                });
+        }
 
         function initMap() {
             // Inisialisasi peta
-            const defaultLocation = { lat: -8.559320, lng: 115.105210 }; 
+            const defaultLocation = { lat: -8.559320, lng: 115.105210 };
             map = new google.maps.Map(document.getElementById("map"), {
                 zoom: 15,
                 center: defaultLocation,
             });
 
+            // Inisialisasi polyline
+            polyline = new google.maps.Polyline({
+                path: path,
+                geodesic: true,
+                strokeColor: '#0000FF', // Warna biru
+                strokeOpacity: 1.0,
+                strokeWeight: 2
+            });
+            polyline.setMap(map); // Tampilkan polyline di peta
+
             // Ambil data dari ThingSpeak
-            fetch('https://api.thingspeak.com/channels/2770137/feeds.json?api_key=JB2MT0HP4G3BF9LS&results=1') // Mengambil hasil terbaru
+            fetch('https://api.thingspeak.com/channels/2770137/feeds.json?api_key=JB2MT0HP4G3BF9LS&results=10')
                 .then(response => response.json())
                 .then(data => {
                     const feeds = data.feeds;
@@ -60,24 +167,64 @@
                         return;
                     }
 
-                    // Ambil data terakhir
-                    const lastFeed = feeds[feeds.length - 1];
-                    const lat = parseFloat(lastFeed.field1);
-                    const lng = parseFloat(lastFeed.field2);
+                    feeds.forEach(feed => {
+                        const lat = parseFloat(feed.field1);
+                        const lng = parseFloat(feed.field2);
+                        const timestamp = new Date(feed.created_at).getTime(); // Dapatkan timestamp
 
-                    // Hapus marker sebelumnya jika ada
-                    if (currentMarker) {
-                        currentMarker.setMap(null);
-                    }
+                        // Validasi lat dan lng
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            // Jika ini bukan pembacaan yang pertama
+                            if (lastLat !== undefined && lastLng !== undefined) {
+                                // Hitung jarak
+                                const distance = calculateDistance(lastLat, lastLng, lat, lng);
 
-                    // Update isi infoBox dengan posisi terbaru
-                    document.getElementById('infoBox').innerText = `Lat: ${lat}, Lng: ${lng}`;
+                                // Hitung waktu berlalu dalam jam
+                                const timeElapsed = (timestamp - lastTimestamp) / 3600000; // konversi dari ms ke jam
 
-                    // Tambahkan marker dengan lokasi terbaru
-                    currentMarker = new google.maps.Marker({
-                        position: { lat, lng },
-                        map: map,
-                        title: `Lat: ${lat}, Lng: ${lng}`
+                                // Hitung kecepatan
+                                const speed = (distance / timeElapsed).toFixed(2); // km/jam
+
+                                // Update kecepatan di infoBox
+                                document.getElementById('speed').innerText = `${speed} km/jam`;
+                            }
+
+                            // Update lokasi dan timestamp
+                            lastLat = lat;
+                            lastLng = lng;
+                            lastTimestamp = timestamp;
+
+                            // Ambil data suhu dan kelembaban dari API cuaca
+                            fetchWeather(lat, lng);
+
+                            // Tambahkan lokasi ke array path dan update polyline
+                            path.push({ lat, lng });
+                            polyline.setPath(path);
+
+                            // Hapus marker sebelumnya jika ada
+                            if (currentMarker) {
+                                currentMarker.setMap(null);
+                            }
+
+                            // Update isi infoBox dengan posisi terbaru
+                            document.getElementById('coordinates').innerText = `Lat: ${lat}, Lng: ${lng}`;
+
+                            // Tambahkan marker dengan lokasi terbaru
+                            currentMarker = new google.maps.Marker({
+                                position: { lat, lng },
+                                map: map,
+                                title: `Lat: ${lat}, Lng: ${lng}`,
+                                icon: {
+                                    url: "https://cdn.pixabay.com/photo/2024/12/01/01/43/01-43-44-289_960_720.png",
+                                    scaledSize: new google.maps.Size(64, 64)
+                                }
+                            });
+
+                            // Center the map to the latest position
+                            map.setCenter({ lat: lat, lng: lng });
+                        } else {
+                            document.getElementById('errorMessage').style.display = 'block';
+                        }
                     });
                 })
                 .catch(error => {
